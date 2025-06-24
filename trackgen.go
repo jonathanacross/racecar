@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -32,8 +33,31 @@ func euclideanDistance(p1, p2 gg.Point) float64 { // Fixed: Changed float6 4 to 
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
+// Expands a polygon
+func Expand(poly []gg.Point, r float64) []gg.Point {
+	numPoints := len(poly)
+	expanded := make([]gg.Point, numPoints)
+
+	for i := 1; i <= len(poly); i++ {
+		prev := poly[i-1]
+		curr := poly[i%numPoints]
+		next := poly[(i+1)%numPoints]
+
+		dx := next.X - prev.X
+		dy := next.Y - prev.Y
+		d := math.Sqrt(dx*dx + dy*dy)
+
+		expanded[i%numPoints] = gg.Point{
+			X: curr.X - (dy * r / d),
+			Y: curr.Y + (dx * r / d),
+		}
+	}
+
+	return expanded
+}
+
 func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, boundsMaxY float64) []gg.Point {
-	points := make([]gg.Point, numPoints)
+	points := []gg.Point{}
 
 	// Determine an approximate 'minDistance' based on the desired number of points and the area.
 	area := (boundsMaxX - boundsMinX) * (boundsMaxY - boundsMinY)
@@ -59,27 +83,6 @@ func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, bounds
 			points = append(points, candidate)
 		}
 	}
-
-	// for i := 0; i < numPoints; i++ {
-	// 	valid := false
-	// 	for !valid {
-	// 		valid = true
-	// 		x := boundsMinX + rand.Float64()*(boundsMaxX-boundsMinX)
-	// 		y := boundsMinY + rand.Float64()*(boundsMaxY-boundsMinY)
-	// 		candidate := gg.Point{X: x, Y: y}
-	// 		// check distance from this point to the other ones; reject candidate if too close
-	// 		for j := 1; j < i; j++ {
-	// 			dist := euclideanDistance(points[j], candidate)
-	// 			if dist < minDistance {
-	// 				valid = false
-	// 				break
-	// 			}
-	// 		}
-	// 		if valid {
-	// 			points[i] = candidate
-	// 		}
-	// 	}
-	// }
 
 	return GetShortestCycle(points)
 }
@@ -160,18 +163,39 @@ func smoothCorners(points []gg.Point) []gg.Point {
 	return smoothed
 }
 
-func DrawToImage(gridX int, gridY int) {
+func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColor color.Color) {
+	dc.MoveTo(poly[0].X, poly[0].Y)
+	for i := 1; i < len(poly); i++ {
+		dc.LineTo(poly[i].X, poly[i].Y)
+	}
+	dc.ClosePath()
+
+	// fill the path, save the path
+	r, g, b, a := fillColor.RGBA()
+	dc.SetRGBA(float64(r)/255.0, float64(g)/255.0, float64(b)/255.0, float64(a)/255.0)
+	dc.FillPreserve()
+
+	// stroke the path
+	r, g, b, a = strokeColor.RGBA()
+	dc.SetRGBA(float64(r)/255.0, float64(g)/255.0, float64(b)/255.0, float64(a)/255.0)
+	dc.SetLineWidth(2)
+	dc.Stroke()
+}
+
+func DrawToImage(numPoints int, roadWidth float64) {
 	width := 600
 	height := 600
 	margin := 50
 
 	trackArea := Rect{left: float64(margin), top: float64(margin), right: float64(width - margin), bottom: float64(height - margin)}
 
-	points := GetTrackSkeleton2(gridX*gridY, trackArea.left, trackArea.top, trackArea.right, trackArea.bottom)
+	points := GetTrackSkeleton2(numPoints, trackArea.left, trackArea.top, trackArea.right, trackArea.bottom)
 	rescaledPoints := rescale(points, trackArea)
 	rounded := smoothCorners(rescaledPoints)
 	rounded = smoothCorners(rounded)
 	rounded = smoothCorners(rounded)
+	expanded := Expand(rounded, roadWidth)
+	expanded2 := Expand(rounded, -roadWidth)
 
 	dc := gg.NewContext(width, height)
 	dc.FillPreserve()
@@ -179,30 +203,10 @@ func DrawToImage(gridX int, gridY int) {
 	dc.DrawRectangle(0, 0, float64(width), float64(height))
 	dc.Stroke()
 
-	dc.MoveTo(rounded[0].X, rounded[0].Y)
-	for i := 1; i < len(rounded); i++ {
-		dc.LineTo(rounded[i].X, rounded[i].Y)
-	}
-	dc.ClosePath()
-
-	dc.SetRGB(0.2, 0.4, 0.8) // Set fill color (e.g., blue)
-	dc.FillPreserve()        // Fill the path
-	dc.SetRGBA(0, 0, 0, 1)   // Set stroke color (e.g., black)
-	dc.SetLineWidth(2)       // Set line width
-	dc.Stroke()              // Stroke the path
-
-	// draw original polygon
-	// dc.MoveTo(rescaledPoints[0].X, rescaledPoints[0].Y)
-	// for i := 1; i < len(rescaledPoints); i++ {
-	// 	dc.LineTo(rescaledPoints[i].X, rescaledPoints[i].Y)
-	// }
-	// dc.ClosePath()
-
-	// dc.SetRGBA(0.0, 0.0, 0.0, 0.0)
-	// dc.FillPreserve()        // Fill the path
-	// dc.SetRGBA(0, 1.0, 0, 1) // Set stroke color (e.g., black)
-	// dc.SetLineWidth(2)       // Set line width
-	// dc.Stroke()              // Stroke the path
+	//DrawPoly(dc, rescaledPoints, color.RGBA{0, 0, 0, 0}, color.RGBA{255, 0, 0, 255})
+	DrawPoly(dc, rounded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255})
+	DrawPoly(dc, expanded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 0, 255, 255})
+	DrawPoly(dc, expanded2, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 128, 255, 255})
 
 	dc.SavePNG("polygon.png") // Save the drawing to a PNG file
 }
@@ -210,21 +214,21 @@ func DrawToImage(gridX int, gridY int) {
 func main() {
 	args := os.Args[1:]
 	if len(args) < 2 {
-		fmt.Println("usage: trackgen x y")
+		fmt.Println("usage: trackgen numPoints roadWidth")
 		return
 	}
 
-	gridX, err := strconv.Atoi(args[0])
+	numPoints, err := strconv.Atoi(args[0])
 	if err != nil {
-		fmt.Printf("could not parse x as integer: %v\n", err)
+		fmt.Printf("could not parse numPoints as integer: %v\n", err)
 		return
 	}
 
-	gridY, err := strconv.Atoi(args[1])
+	roadWidth, err := strconv.ParseFloat(args[1], 64)
 	if err != nil {
-		fmt.Printf("could not parse y as integer: %v\n", err)
+		fmt.Printf("could not parse roadWidth as float: %v\n", err)
 		return
 	}
 
-	DrawToImage(gridX, gridY)
+	DrawToImage(numPoints, roadWidth)
 }
