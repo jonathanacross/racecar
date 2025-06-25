@@ -34,10 +34,11 @@ func euclideanDistance(p1, p2 gg.Point) float64 { // Fixed: Changed float6 4 to 
 }
 
 // Expands a polygon
-func Expand(poly []gg.Point, r float64) []gg.Point {
+func Expand(poly []gg.Point, r float64, curvatures []float64) []gg.Point {
 	numPoints := len(poly)
 	expanded := make([]gg.Point, numPoints)
 
+	// TODO: change index to 0 based
 	for i := 1; i <= len(poly); i++ {
 		prev := poly[i-1]
 		curr := poly[i%numPoints]
@@ -47,13 +48,92 @@ func Expand(poly []gg.Point, r float64) []gg.Point {
 		dy := next.Y - prev.Y
 		d := math.Sqrt(dx*dx + dy*dy)
 
+		// Logic for curvatures
+		radius := 1.0 / curvatures[i%numPoints]
+		minRoadWidth := r
+		if (radius > 0 && r > 0 && radius < r) ||
+			(radius < 0 && r < 0 && radius > r) {
+			minRoadWidth = radius
+		}
+
+		// logic for maxDists..
+		// minRoadWidth := r
+		// maxDist := curvatures[i%numPoints]
+		// if r > 0 && maxDist < r {
+		// 	minRoadWidth = maxDist
+		// } else if r < 0 && maxDist > -r {
+		// 	minRoadWidth = -maxDist
+		// }
+
 		expanded[i%numPoints] = gg.Point{
-			X: curr.X - (dy * r / d),
-			Y: curr.Y + (dx * r / d),
+			X: curr.X - (dy * minRoadWidth / d),
+			Y: curr.Y + (dx * minRoadWidth / d),
 		}
 	}
 
 	return expanded
+}
+
+func GetCurvature(poly []gg.Point) []float64 {
+	numPoints := len(poly)
+	curvatures := make([]float64, numPoints)
+
+	// For a function r(t) = (x(t), y(t), z(t))
+	// the curvature is (r' x r'') / |r'|^3
+
+	for i := 0; i < len(poly); i++ {
+		// Use 5 consecutive points to estimate r', r''
+		prev2 := poly[i]
+		prev := poly[(i+1)%numPoints]
+		curr := poly[(i+2)%numPoints]
+		next := poly[(i+3)%numPoints]
+		next2 := poly[(i+4)%numPoints]
+
+		rPrime := gg.Point{
+			X: 0.5 * (next.X - prev.X),
+			Y: 0.5 * (next.Y - prev.Y),
+		}
+
+		// Estimate second derivative by differences of differences
+		rPrimePrime := gg.Point{
+			X: 0.25 * ((next2.X - curr.X) - (curr.X - prev2.X)),
+			Y: 0.25 * ((next2.Y - curr.Y) - (curr.Y - prev2.Y)),
+		}
+
+		// Since r', r'' are 2D vectors, we don't need a full 3x3 determinant,
+		// just the 2x2 determinant of the x, y components.
+		cross := rPrime.X*rPrimePrime.Y - rPrime.Y*rPrimePrime.X
+
+		rPrimeNorm := math.Sqrt(rPrime.X*rPrime.X + rPrime.Y*rPrime.Y)
+
+		curvature := cross / (rPrimeNorm * rPrimeNorm * rPrimeNorm)
+
+		curvatures[(i+2)%numPoints] = curvature
+	}
+
+	return curvatures
+}
+
+func GetMaxRadius(poly []gg.Point) []float64 {
+	numPoints := len(poly)
+	dists := make([]float64, numPoints)
+
+	for i := 0; i < numPoints; i++ {
+		// find the nearest point to this one.
+		minDist := math.MaxFloat64
+		for j := 0; j < numPoints; j++ {
+			if (i == j) || (i == j-1) || (i == j+1) { //  TOOD: won't handle cyclick
+				continue
+			}
+			dist := euclideanDistance(poly[i], poly[j])
+			if dist < minDist {
+				minDist = dist
+			}
+		}
+		dists[i] = minDist / 3
+	}
+
+	return dists
 }
 
 func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, boundsMaxY float64) []gg.Point {
@@ -193,9 +273,15 @@ func DrawToImage(numPoints int, roadWidth float64) {
 	rescaledPoints := rescale(points, trackArea)
 	rounded := smoothCorners(rescaledPoints)
 	rounded = smoothCorners(rounded)
-	rounded = smoothCorners(rounded)
-	expanded := Expand(rounded, roadWidth)
-	expanded2 := Expand(rounded, -roadWidth)
+	//rounded = smoothCorners(rounded)
+
+	//maxDists := GetMaxRadius(rounded)
+	curvatures := GetCurvature(rounded)
+	for _, k := range curvatures {
+		fmt.Println("%v", 1.0/k)
+	}
+	expanded := Expand(rounded, roadWidth, curvatures)
+	expanded2 := Expand(rounded, -roadWidth, curvatures)
 
 	dc := gg.NewContext(width, height)
 	dc.FillPreserve()
@@ -206,6 +292,16 @@ func DrawToImage(numPoints int, roadWidth float64) {
 	//DrawPoly(dc, rescaledPoints, color.RGBA{0, 0, 0, 0}, color.RGBA{255, 0, 0, 255})
 	DrawPoly(dc, rounded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255})
 	DrawPoly(dc, expanded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 0, 255, 255})
+	// for i, k := range curvatures {
+	// 	radius := 1.0 / k
+	// 	point := expanded[i]
+	// 	if i%5 == 0 && radius > 0 {
+	// 		//if math.Abs(radius) < 150 {
+	// 		dc.SetRGBA(1.0, 1.0, 0.0, 1.0)
+	// 		dc.DrawCircle(point.X, point.Y, radius)
+	// 		dc.Stroke()
+	// 	}
+	// }
 	DrawPoly(dc, expanded2, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 128, 255, 255})
 
 	dc.SavePNG("polygon.png") // Save the drawing to a PNG file
