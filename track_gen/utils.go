@@ -25,6 +25,9 @@ func Dist(p1 Point, p2 Point) float64 {
 
 func Norm(vec Point) Point {
 	len := math.Sqrt(vec.X*vec.X + vec.Y*vec.Y)
+	if len == 0 {
+		return Point{X: 0, Y: 0}
+	}
 	return Point{
 		X: vec.X / len,
 		Y: vec.Y / len,
@@ -79,9 +82,8 @@ func Reverse(poly []Point) {
 }
 
 // Reorders the vertices of poly, if needed, so that the polygon
-// has positive orientation.  If we consider Y to be down, this
-// the vertices follow a clockwise order.
-func OrientClockwise(poly []Point) {
+// has positive area.
+func OrientPositive(poly []Point) {
 	if Area(poly) < 0 {
 		Reverse(poly)
 	}
