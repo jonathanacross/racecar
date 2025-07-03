@@ -8,7 +8,7 @@ import (
 // Expands a polygon
 // TODO: consider changing algorithm to standard polygon expansion
 // so that sides are parallel.
-func expand(poly []Point, r float64, curvatures []float64) []Point {
+func expand(poly []Point, r float64) []Point {
 	numPoints := len(poly)
 	expanded := make([]Point, numPoints)
 
@@ -22,62 +22,13 @@ func expand(poly []Point, r float64, curvatures []float64) []Point {
 		dy := next.Y - prev.Y
 		d := math.Sqrt(dx*dx + dy*dy)
 
-		// Logic for curvatures
-		radius := 1.0 / curvatures[i%numPoints]
-		minRoadWidth := r
-		if (radius > 0 && r > 0 && radius < r) ||
-			(radius < 0 && r < 0 && radius > r) {
-			minRoadWidth = radius
-		}
-
 		expanded[i%numPoints] = Point{
-			X: curr.X - (dy * minRoadWidth / d),
-			Y: curr.Y + (dx * minRoadWidth / d),
+			X: curr.X - (dy * r / d),
+			Y: curr.Y + (dx * r / d),
 		}
 	}
 
 	return expanded
-}
-
-// TODO: can I remove this?
-func GetCurvature(poly []Point) []float64 {
-	numPoints := len(poly)
-	curvatures := make([]float64, numPoints)
-
-	// For a function r(t) = (x(t), y(t), z(t))
-	// the curvature is (r' x r'') / |r'|^3
-
-	for i := 0; i < len(poly); i++ {
-		// Use 5 consecutive points to estimate r', r''
-		prev2 := poly[i]
-		prev := poly[(i+1)%numPoints]
-		curr := poly[(i+2)%numPoints]
-		next := poly[(i+3)%numPoints]
-		next2 := poly[(i+4)%numPoints]
-
-		rPrime := Point{
-			X: 0.5 * (next.X - prev.X),
-			Y: 0.5 * (next.Y - prev.Y),
-		}
-
-		// Estimate second derivative by differences of differences
-		rPrimePrime := Point{
-			X: 0.25 * ((next2.X - curr.X) - (curr.X - prev2.X)),
-			Y: 0.25 * ((next2.Y - curr.Y) - (curr.Y - prev2.Y)),
-		}
-
-		// Since r', r'' are 2D vectors, we don't need a full 3x3 determinant,
-		// just the 2x2 determinant of the x, y components.
-		cross := rPrime.X*rPrimePrime.Y - rPrime.Y*rPrimePrime.X
-
-		rPrimeNorm := math.Sqrt(rPrime.X*rPrime.X + rPrime.Y*rPrime.Y)
-
-		curvature := cross / (rPrimeNorm * rPrimeNorm * rPrimeNorm)
-
-		curvatures[(i+2)%numPoints] = curvature
-	}
-
-	return curvatures
 }
 
 // getTrackSkeleton generates a random polygon with numPoints points
@@ -117,7 +68,7 @@ func getTrackSkeleton(numPoints int, bounds Rect) []Point {
 }
 
 func perturb(ladder []Point, width float64, height float64, roadWidth float64) {
-	// compute total force on each vertex
+	// Compute total force on each vertex.
 	numPoints := len(ladder)
 	forces := make([]Point, numPoints)
 
@@ -127,7 +78,7 @@ func perturb(ladder []Point, width float64, height float64, roadWidth float64) {
 	targetLen := 50.0
 
 	for i := 0; i < numPoints; i++ {
-		// move each point toward average of neighbors
+		// Move each point toward average of neighbors.
 		j := (i + 1) % numPoints
 		k := (i + 2) % numPoints
 		targetLoc := Point{
@@ -256,14 +207,13 @@ func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, o
 	// Perturb the points so that after expanding, there is less likelihood of
 	// self-intersections.
 	// TODO: add intersection check and redo if there are inersections at the end
-	for iter := 0; iter < 20; iter++ {
+	for range 20 {
 		perturb(rescaledPoints, bounds.Width(), bounds.Height(), roadWidth)
 	}
 	rounded := smoothCorners(rescaledPoints)
 
-	curvatures := GetCurvature(rounded)
 	// TODO: need to orient poly to determine which is inner and which is outer.
-	inner = expand(rounded, roadWidth, curvatures)
-	outer = expand(rounded, -roadWidth, curvatures)
+	inner = expand(rounded, roadWidth)
+	outer = expand(rounded, -roadWidth)
 	return
 }
