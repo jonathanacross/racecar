@@ -80,39 +80,21 @@ func GetCurvature(poly []Point) []float64 {
 	return curvatures
 }
 
-func GetMaxRadius(poly []Point) []float64 {
-	numPoints := len(poly)
-	dists := make([]float64, numPoints)
-
-	for i := 0; i < numPoints; i++ {
-		// Find the nearest point to this one.
-		minDist := math.MaxFloat64
-		for j := 0; j < numPoints; j++ {
-			if (i == j) || (i == j-1) || (i == j+1) { //  TOOD: won't handle cyclick
-				continue
-			}
-			dist := Dist(poly[i], poly[j])
-			if dist < minDist {
-				minDist = dist
-			}
-		}
-		dists[i] = minDist / 3
-	}
-
-	return dists
-}
-
-// TODO: update name, make private
-func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, boundsMaxY float64) []Point {
+// getTrackSkeleton generates a random polygon with numPoints points
+// lying within bounds.  The polygon is suitable to use as an initial
+// skeleton for where the road will follow (e.g., no self-intersections,
+// points are not too close to each other).
+// TODO: refactor the point generation code to a separate function.
+func getTrackSkeleton(numPoints int, bounds Rect) []Point {
 	points := []Point{}
 
 	// Determine an approximate 'minDistance' based on the desired number of points and the area.
-	area := (boundsMaxX - boundsMinX) * (boundsMaxY - boundsMinY)
+	area := bounds.Width() * bounds.Height()
 	minDistance := math.Sqrt(area / (float64(numPoints) * math.Pi))
 
 	for len(points) < numPoints {
-		candidateX := boundsMinX + rand.Float64()*(boundsMaxX-boundsMinX)
-		candidateY := boundsMinY + rand.Float64()*(boundsMaxY-boundsMinY)
+		candidateX := bounds.left + rand.Float64()*bounds.Width()
+		candidateY := bounds.top + rand.Float64()*bounds.Height()
 		candidate := Point{X: candidateX, Y: candidateY}
 
 		isTooClose := false
@@ -266,8 +248,7 @@ func smoothCorners(points []Point) []Point {
 }
 
 func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
-	// TODO: fix signature and rename
-	points := GetTrackSkeleton2(numPoints, bounds.left, bounds.top, bounds.right, bounds.bottom)
+	points := getTrackSkeleton(numPoints, bounds)
 	rescaledPointsOrig := rescale(points, bounds)
 	rescaledPoints := make([]Point, len(rescaledPointsOrig))
 	copy(rescaledPoints, rescaledPointsOrig)
