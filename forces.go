@@ -34,7 +34,7 @@ func euclideanDistance(p1, p2 gg.Point) float64 { // Fixed: Changed float6 4 to 
 }
 
 func norm(vec gg.Point) gg.Point {
-	len := math.Sqrt(vec.X*vec.X + vec.Y + vec.Y)
+	len := math.Sqrt(vec.X*vec.X + vec.Y*vec.Y)
 	return gg.Point{
 		X: vec.X / len,
 		Y: vec.Y / len,
@@ -48,6 +48,37 @@ func GetNewPath(numPoints int, width float64, height float64) []gg.Point {
 		points[i].Y = rand.Float64() * height
 	}
 	return points
+}
+
+func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, boundsMaxY float64) []gg.Point {
+	points := []gg.Point{}
+
+	// Determine an approximate 'minDistance' based on the desired number of points and the area.
+	area := (boundsMaxX - boundsMinX) * (boundsMaxY - boundsMinY)
+	minDistance := math.Sqrt(area / (float64(numPoints) * math.Pi))
+
+	for len(points) < numPoints { // Loop until we have enough points
+		candidateX := boundsMinX + rand.Float64()*(boundsMaxX-boundsMinX)
+		candidateY := boundsMinY + rand.Float64()*(boundsMaxY-boundsMinY)
+		candidate := gg.Point{X: candidateX, Y: candidateY}
+
+		isTooClose := false
+		// Check distance from this candidate to all previously accepted points.
+		for _, existingPoint := range points {
+			dist := euclideanDistance(existingPoint, candidate)
+			if dist < minDistance {
+				isTooClose = true
+				break // Candidate is too close, reject and try a new one
+			}
+		}
+
+		if !isTooClose {
+			// If the candidate is not too close to any existing point, add it.
+			points = append(points, candidate)
+		}
+	}
+
+	return GetShortestCycle(points)
 }
 
 func clamp(x float64, lo float64, hi float64) float64 {
@@ -65,9 +96,9 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 	numPoints := len(ladder)
 	forces := make([]gg.Point, numPoints)
 
-	fBending := 0.05
+	fBending := 0.1
 	fLength := 0.05
-	fNonAdj := 0.05
+	fNonAdj := 0.005
 	targetLen := 50.0
 
 	// totalLen := 0.0
@@ -78,7 +109,6 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 	// avgLen := totalLen / float64(numPoints)
 
 	for i := 0; i < numPoints; i++ {
-		fmt.Printf("i = %v\n", i)
 		// move each point toward average of neighbors
 		j := (i + 1) % numPoints
 		k := (i + 2) % numPoints
@@ -90,7 +120,7 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 		forces[j].Y += fBending * (targetLoc.Y - ladder[j].Y)
 
 		// try to make segments the same length
-		// j := (i + 1) % numPoints
+		//j := (i + 1) % numPoints
 		dAdj := euclideanDistance(ladder[j], ladder[i])
 		fRungInner := fLength * (dAdj - targetLen)
 		innerVec := norm(gg.Point{
@@ -103,6 +133,7 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 		forces[j].Y -= innerVec.Y * fRungInner
 
 		// Try to make sure non-adjacent vertices don't get too close
+		// TODO: this should really be looking at closest point to each segment, not to each point.
 		for m := 0; m < numPoints; m++ {
 			if m == i || m == j || m == k {
 				continue
@@ -119,8 +150,8 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 	// apply forces
 	margin := 50.0
 	for i := 0; i < numPoints; i++ {
-		ladder[i].X += 0.1 * forces[i].X
-		ladder[i].Y += 0.1 * forces[i].Y
+		ladder[i].X += forces[i].X
+		ladder[i].Y += forces[i].Y
 
 		// ensure stays in bounding box
 		ladder[i].X = clamp(ladder[i].X, margin, width-margin)
@@ -179,7 +210,6 @@ func rescale(points []gg.Point, targetRect Rect) []gg.Point {
 }
 
 func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColor color.Color) {
-	fmt.Println("a..")
 	dc.MoveTo(poly[0].X, poly[0].Y)
 	for i := 1; i < len(poly); i++ {
 		dc.LineTo(poly[i].X, poly[i].Y)
@@ -187,26 +217,23 @@ func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColo
 	dc.ClosePath()
 
 	// fill the path, save the path
-	// fmt.Println("b..")
 	// r, g, b, a := fillColor.RGBA()
 	// dc.SetRGBA(float64(r)/255.0, float64(g)/255.0, float64(b)/255.0, float64(a)/255.0)
 	// dc.FillPreserve()
 
 	// stroke the path
-	fmt.Println("c..")
 	r, g, b, a := strokeColor.RGBA()
 	dc.SetRGBA(float64(r)/255.0, float64(g)/255.0, float64(b)/255.0, float64(a)/255.0)
 	dc.SetLineWidth(2)
-	fmt.Println("stroking..")
 	dc.Stroke()
 }
 
 func DrawToImage(numPoints int, roadWidth float64) {
 	width := 600
 	height := 600
-	//margin := 50
+	margin := 50
 
-	//trackArea := Rect{left: float64(margin), top: float64(margin), right: float64(width - margin), bottom: float64(height - margin)}
+	trackArea := Rect{left: float64(margin), top: float64(margin), right: float64(width - margin), bottom: float64(height - margin)}
 
 	// cx := float64(width / 2)
 	// cy := float64(height / 2)
@@ -219,16 +246,14 @@ func DrawToImage(numPoints int, roadWidth float64) {
 	dc.DrawRectangle(0, 0, float64(width), float64(height))
 	dc.Stroke()
 
-	ladder := GetNewPath(numPoints, float64(width), float64(height))
+	ladder := GetTrackSkeleton2(numPoints, trackArea.left, trackArea.top, trackArea.right, trackArea.bottom)
 
 	DrawPoly(dc, ladder, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255})
 
-	for iter := 0; iter < 5; iter++ {
+	for iter := 0; iter < 10; iter++ {
 		Perturb(ladder, float64(width), float64(height), roadWidth)
 	}
-	fmt.Println("finished perturbation")
 	DrawPoly(dc, ladder, color.RGBA{0, 0, 0, 0}, color.RGBA{255, 255, 0, 255})
-	fmt.Println("saving..")
 
 	dc.SavePNG("ladder.png")
 }
