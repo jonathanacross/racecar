@@ -101,13 +101,6 @@ func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64
 	fNonAdj := 0.005
 	targetLen := 50.0
 
-	// totalLen := 0.0
-	// for i := 0; i < numPoints; i++ {
-	// 	j := (i + 1) % numPoints
-	// 	totalLen += euclideanDistance(ladder[i], ladder[j])
-	// }
-	// avgLen := totalLen / float64(numPoints)
-
 	for i := 0; i < numPoints; i++ {
 		// move each point toward average of neighbors
 		j := (i + 1) % numPoints

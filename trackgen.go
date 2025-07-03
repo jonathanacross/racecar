@@ -33,6 +33,14 @@ func euclideanDistance(p1, p2 gg.Point) float64 { // Fixed: Changed float6 4 to 
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
+func norm(vec gg.Point) gg.Point {
+	len := math.Sqrt(vec.X*vec.X + vec.Y*vec.Y)
+	return gg.Point{
+		X: vec.X / len,
+		Y: vec.Y / len,
+	}
+}
+
 // Expands a polygon
 func Expand(poly []gg.Point, r float64, curvatures []float64) []gg.Point {
 	numPoints := len(poly)
@@ -167,6 +175,78 @@ func GetTrackSkeleton2(numPoints int, boundsMinX, boundsMinY, boundsMaxX, bounds
 	return GetShortestCycle(points)
 }
 
+func clamp(x float64, lo float64, hi float64) float64 {
+	if x < lo {
+		return lo
+	}
+	if x > hi {
+		return hi
+	}
+	return x
+}
+
+func Perturb(ladder []gg.Point, width float64, height float64, roadWidth float64) {
+	// compute total force on each vertex
+	numPoints := len(ladder)
+	forces := make([]gg.Point, numPoints)
+
+	fBending := 0.1
+	fLength := 0.05
+	fNonAdj := 0.005
+	targetLen := 50.0
+
+	for i := 0; i < numPoints; i++ {
+		// move each point toward average of neighbors
+		j := (i + 1) % numPoints
+		k := (i + 2) % numPoints
+		targetLoc := gg.Point{
+			X: 0.5 * (ladder[i].X + ladder[k].X),
+			Y: 0.5 * (ladder[i].Y + ladder[k].Y),
+		}
+		forces[j].X += fBending * (targetLoc.X - ladder[j].X)
+		forces[j].Y += fBending * (targetLoc.Y - ladder[j].Y)
+
+		// try to make segments the same length
+		//j := (i + 1) % numPoints
+		dAdj := euclideanDistance(ladder[j], ladder[i])
+		fRungInner := fLength * (dAdj - targetLen)
+		innerVec := norm(gg.Point{
+			X: ladder[j].X - ladder[i].X,
+			Y: ladder[j].Y - ladder[i].Y,
+		})
+		forces[i].X += innerVec.X * fRungInner
+		forces[i].Y += innerVec.Y * fRungInner
+		forces[j].X -= innerVec.X * fRungInner
+		forces[j].Y -= innerVec.Y * fRungInner
+
+		// Try to make sure non-adjacent vertices don't get too close
+		// TODO: this should really be looking at closest point to each segment, not to each point.
+		for m := 0; m < numPoints; m++ {
+			if m == i || m == j || m == k {
+				continue
+			}
+			dNonAdj := euclideanDistance(ladder[j], ladder[m])
+			// TODO: roadwidth here really means half-road widths.  update naming
+			if dNonAdj < 3*roadWidth {
+				totalFNonAdj := -fNonAdj * (3*roadWidth - dNonAdj)
+				forces[j].X += totalFNonAdj * (ladder[m].X - ladder[j].X)
+				forces[j].Y += totalFNonAdj * (ladder[m].Y - ladder[j].Y)
+			}
+		}
+	}
+
+	// apply forces
+	margin := 50.0
+	for i := 0; i < numPoints; i++ {
+		ladder[i].X += forces[i].X
+		ladder[i].Y += forces[i].Y
+
+		// ensure stays in bounding box
+		ladder[i].X = clamp(ladder[i].X, margin, width-margin)
+		ladder[i].Y = clamp(ladder[i].Y, margin, height-margin)
+	}
+}
+
 func getBoundingBox(points []gg.Point) Rect {
 	minX, minY := points[0].X, points[0].Y
 	maxX, maxY := points[0].X, points[0].Y
@@ -270,16 +350,20 @@ func DrawToImage(numPoints int, roadWidth float64) {
 	trackArea := Rect{left: float64(margin), top: float64(margin), right: float64(width - margin), bottom: float64(height - margin)}
 
 	points := GetTrackSkeleton2(numPoints, trackArea.left, trackArea.top, trackArea.right, trackArea.bottom)
-	rescaledPoints := rescale(points, trackArea)
+	rescaledPointsOrig := rescale(points, trackArea)
+	rescaledPoints := make([]gg.Point, len(rescaledPointsOrig))
+	copy(rescaledPoints, rescaledPointsOrig)
+
+	// smooth corners, try to avoid intersections
+	for iter := 0; iter < 20; iter++ {
+		Perturb(rescaledPoints, float64(width), float64(height), roadWidth)
+	}
 	rounded := smoothCorners(rescaledPoints)
-	rounded = smoothCorners(rounded)
+	// rounded = smoothCorners(rounded)
 	//rounded = smoothCorners(rounded)
 
 	//maxDists := GetMaxRadius(rounded)
 	curvatures := GetCurvature(rounded)
-	for _, k := range curvatures {
-		fmt.Println("%v", 1.0/k)
-	}
 	expanded := Expand(rounded, roadWidth, curvatures)
 	expanded2 := Expand(rounded, -roadWidth, curvatures)
 
@@ -289,8 +373,9 @@ func DrawToImage(numPoints int, roadWidth float64) {
 	dc.DrawRectangle(0, 0, float64(width), float64(height))
 	dc.Stroke()
 
-	//DrawPoly(dc, rescaledPoints, color.RGBA{0, 0, 0, 0}, color.RGBA{255, 0, 0, 255})
-	DrawPoly(dc, rounded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255})
+	//DrawPoly(dc, rescaledPointsOrig, color.RGBA{0, 0, 0, 0}, color.RGBA{128, 0, 255, 255})
+	// DrawPoly(dc, rescaledPoints, color.RGBA{0, 0, 0, 0}, color.RGBA{255, 0, 0, 255})
+	// DrawPoly(dc, rounded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255})
 	DrawPoly(dc, expanded, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 0, 255, 255})
 	// for i, k := range curvatures {
 	// 	radius := 1.0 / k
