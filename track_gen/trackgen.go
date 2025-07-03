@@ -154,7 +154,6 @@ func getBoundingBox(points []Point) Rect {
 }
 
 // Rescales a set of points to fit in a new rectangle
-// TODO: include track width in computation
 func rescale(points []Point, targetRect Rect) []Point {
 	srcRect := getBoundingBox(points)
 
@@ -201,7 +200,7 @@ func smoothCorners(points []Point) []Point {
 	return smoothed
 }
 
-func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
+func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
 	points := getTrackSkeleton(numPoints, bounds)
 	rescaledPointsOrig := rescale(points, bounds)
 	rescaledPoints := make([]Point, len(rescaledPointsOrig))
@@ -230,4 +229,13 @@ func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, o
 	inner = expand(rounded, roadWidth)
 	outer = expand(rounded, -roadWidth)
 	return
+}
+
+func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
+	for {
+		inner, outer = BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
+		if !IsSelfIntersecting(inner) && !IsSelfIntersecting(outer) {
+			return
+		}
+	}
 }
