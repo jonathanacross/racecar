@@ -30,7 +30,7 @@ func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColo
 	dc.Stroke()
 }
 
-func ConvertPolyToGgPoly(points []Point) []gg.Point {
+func toGgPoly(points []Point) []gg.Point {
 	result := make([]gg.Point, len(points))
 	for i, p := range points {
 		result[i] = gg.Point{X: p.X, Y: p.Y}
@@ -43,10 +43,7 @@ func DrawToImage(width int, height int, numPoints int, roadWidth float64) {
 
 	bounds := Rect{left: float64(margin), top: float64(margin), right: float64(width) - margin, bottom: float64(height) - margin}
 
-	inner, outer := BuildTrack(numPoints, bounds, roadWidth)
-
-	innergg := ConvertPolyToGgPoly(inner)
-	outergg := ConvertPolyToGgPoly(outer)
+	trackData := BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
 
 	dc := gg.NewContext(width, height)
 	dc.FillPreserve()
@@ -54,8 +51,27 @@ func DrawToImage(width int, height int, numPoints int, roadWidth float64) {
 	dc.DrawRectangle(0, 0, float64(width), float64(height))
 	dc.Stroke()
 
-	DrawPoly(dc, innergg, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 0, 255, 255})
-	DrawPoly(dc, outergg, color.RGBA{0, 0, 0, 0}, color.RGBA{0, 128, 255, 255})
+	red := color.RGBA{255, 0, 0, 255}
+	yellow := color.RGBA{255, 255, 0, 255}
+	purple := color.RGBA{255, 0, 128, 255}
+	darkBlue := color.RGBA{0, 0, 255, 255}
+	lightBlue := color.RGBA{0, 128, 255, 255}
+	darkGreen := color.RGBA{0, 255, 0, 255}
+	lightGreen := color.RGBA{128, 255, 128, 255}
+
+	innerColor := darkGreen
+	if IsSelfIntersecting(trackData.inner) {
+		innerColor = darkBlue
+	}
+	outerColor := lightGreen
+	if IsSelfIntersecting(trackData.inner) {
+		outerColor = lightBlue
+	}
+	DrawPoly(dc, toGgPoly(trackData.orig), color.RGBA{0, 0, 0, 0}, purple)
+	DrawPoly(dc, toGgPoly(trackData.perturbed), color.RGBA{0, 0, 0, 0}, red)
+	DrawPoly(dc, toGgPoly(trackData.rounded), color.RGBA{0, 0, 0, 0}, yellow)
+	DrawPoly(dc, toGgPoly(trackData.inner), color.RGBA{0, 0, 0, 0}, innerColor)
+	DrawPoly(dc, toGgPoly(trackData.outer), color.RGBA{0, 0, 0, 0}, outerColor)
 
 	dc.SavePNG("polygon.png") // Save the drawing to a PNG file
 }

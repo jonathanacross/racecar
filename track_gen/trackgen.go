@@ -68,7 +68,9 @@ func getPointsWithPoissonDiscSampling(numPoints int, bounds Rect) []Point {
 // skeleton for a road.
 func getTrackSkeleton(numPoints int, bounds Rect) []Point {
 	points := getPointsWithPoissonDiscSampling(numPoints, bounds)
-	return GetShortestCycle(points)
+	cycle := GetShortestCycle(points)
+	OrientPositive(cycle)
+	return cycle
 }
 
 func perturb(ladder []Point, bounds Rect, roadWidth float64) {
@@ -200,7 +202,15 @@ func smoothCorners(points []Point) []Point {
 	return smoothed
 }
 
-func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
+type TrackDebugData struct {
+	inner     []Point
+	outer     []Point
+	orig      []Point
+	perturbed []Point
+	rounded   []Point
+}
+
+func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float64) TrackDebugData {
 	points := getTrackSkeleton(numPoints, bounds)
 	rescaledPointsOrig := rescale(points, bounds)
 	rescaledPoints := make([]Point, len(rescaledPointsOrig))
@@ -208,33 +218,39 @@ func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float6
 
 	// Perturb the points so that after expanding, there is less likelihood of
 	// self-intersections.
-	// TODO: add intersection check and redo if there are inersections at the end
 	for range 20 {
 		perturb(rescaledPoints, bounds, roadWidth)
 	}
 
-	// Rescale the perturbed points so that they fill the bounding box
-	// (since perturbation tends to shrink paths a bit).
-	insetBounds := Rect{
-		left:   bounds.left + roadWidth,
-		top:    bounds.top + roadWidth,
-		right:  bounds.right - roadWidth,
-		bottom: bounds.bottom - roadWidth,
-	}
-	rescaledPoints = rescale(rescaledPoints, insetBounds)
-
+	// TODO: enable after debugging
+	// // Rescale the perturbed points so that they fill the bounding box
+	// // (since perturbation tends to shrink paths a bit).
+	// insetBounds := Rect{
+	// 	left:   bounds.left + roadWidth,
+	// 	top:    bounds.top + roadWidth,
+	// 	right:  bounds.right - roadWidth,
+	// 	bottom: bounds.bottom - roadWidth,
+	// }
+	// rescaledPoints = rescale(rescaledPoints, insetBounds)
 	rounded := smoothCorners(rescaledPoints)
+	inner := expand(rounded, roadWidth)
+	outer := expand(rounded, -roadWidth)
 
-	// TODO: need to orient poly to determine which is inner and which is outer.
-	inner = expand(rounded, roadWidth)
-	outer = expand(rounded, -roadWidth)
-	return
+	return TrackDebugData{
+		orig:      points,
+		perturbed: rescaledPoints,
+		rounded:   rounded,
+		inner:     inner,
+		outer:     outer,
+	}
 }
 
 func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
 	for {
-		inner, outer = BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
-		if !IsSelfIntersecting(inner) && !IsSelfIntersecting(outer) {
+		trackData := BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
+		if !IsSelfIntersecting(trackData.inner) && !IsSelfIntersecting(trackData.outer) {
+			inner = trackData.inner
+			outer = trackData.outer
 			return
 		}
 	}
