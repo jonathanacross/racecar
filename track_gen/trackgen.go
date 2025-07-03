@@ -12,17 +12,16 @@ func expand(poly []Point, r float64) []Point {
 	numPoints := len(poly)
 	expanded := make([]Point, numPoints)
 
-	// TODO: change index to 0 based
-	for i := 1; i <= len(poly); i++ {
-		prev := poly[i-1]
-		curr := poly[i%numPoints]
-		next := poly[(i+1)%numPoints]
+	for i := 0; i < len(poly); i++ {
+		prev := poly[i]
+		curr := poly[(i+1)%numPoints]
+		next := poly[(i+2)%numPoints]
 
 		dx := next.X - prev.X
 		dy := next.Y - prev.Y
 		d := math.Sqrt(dx*dx + dy*dy)
 
-		expanded[i%numPoints] = Point{
+		expanded[(i+1)%numPoints] = Point{
 			X: curr.X - (dy * r / d),
 			Y: curr.Y + (dx * r / d),
 		}
@@ -31,12 +30,10 @@ func expand(poly []Point, r float64) []Point {
 	return expanded
 }
 
-// getTrackSkeleton generates a random polygon with numPoints points
-// lying within bounds.  The polygon is suitable to use as an initial
-// skeleton for where the road will follow (e.g., no self-intersections,
-// points are not too close to each other).
-// TODO: refactor the point generation code to a separate function.
-func getTrackSkeleton(numPoints int, bounds Rect) []Point {
+// getPointsWithPoissonDiscSampling generates numPoints random points
+// within bounds.  This uses Poisson disc sampling to ensure that
+// points do not lie too close to each other.
+func getPointsWithPoissonDiscSampling(numPoints int, bounds Rect) []Point {
 	points := []Point{}
 
 	// Determine an approximate 'minDistance' based on the desired number of points and the area.
@@ -63,11 +60,18 @@ func getTrackSkeleton(numPoints int, bounds Rect) []Point {
 			points = append(points, candidate)
 		}
 	}
+	return points
+}
 
+// getTrackSkeleton generates a random polygon with numPoints points
+// lying within bounds.  The polygon is suitable to use as an initial
+// skeleton for a road.
+func getTrackSkeleton(numPoints int, bounds Rect) []Point {
+	points := getPointsWithPoissonDiscSampling(numPoints, bounds)
 	return GetShortestCycle(points)
 }
 
-func perturb(ladder []Point, width float64, height float64, roadWidth float64) {
+func perturb(ladder []Point, bounds Rect, roadWidth float64) {
 	// Compute total force on each vertex.
 	numPoints := len(ladder)
 	forces := make([]Point, numPoints)
@@ -89,7 +93,6 @@ func perturb(ladder []Point, width float64, height float64, roadWidth float64) {
 		forces[j].Y += fBending * (targetLoc.Y - ladder[j].Y)
 
 		// try to make segments the same length
-		//j := (i + 1) % numPoints
 		dAdj := Dist(ladder[j], ladder[i])
 		fRungInner := fLength * (dAdj - targetLen)
 		innerVec := Norm(Point{
@@ -117,15 +120,15 @@ func perturb(ladder []Point, width float64, height float64, roadWidth float64) {
 		}
 	}
 
-	// apply forces
-	margin := 50.0
+	// Apply forces.
 	for i := 0; i < numPoints; i++ {
 		ladder[i].X += forces[i].X
 		ladder[i].Y += forces[i].Y
 
-		// ensure stays in bounding box
-		ladder[i].X = Clamp(ladder[i].X, margin, width-margin)
-		ladder[i].Y = Clamp(ladder[i].Y, margin, height-margin)
+		// Ensure path stays in the bounding box.  Include some buffer
+		// so that after expanding, the final road will be within bounds.
+		ladder[i].X = Clamp(ladder[i].X, bounds.left+roadWidth, bounds.right-roadWidth)
+		ladder[i].Y = Clamp(ladder[i].Y, bounds.top+roadWidth, bounds.bottom-roadWidth)
 	}
 }
 
@@ -208,8 +211,19 @@ func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, o
 	// self-intersections.
 	// TODO: add intersection check and redo if there are inersections at the end
 	for range 20 {
-		perturb(rescaledPoints, bounds.Width(), bounds.Height(), roadWidth)
+		perturb(rescaledPoints, bounds, roadWidth)
 	}
+
+	// Rescale the perturbed points so that they fill the bounding box
+	// (since perturbation tends to shrink paths a bit).
+	insetBounds := Rect{
+		left:   bounds.left + roadWidth,
+		top:    bounds.top + roadWidth,
+		right:  bounds.right - roadWidth,
+		bottom: bounds.bottom - roadWidth,
+	}
+	rescaledPoints = rescale(rescaledPoints, insetBounds)
+
 	rounded := smoothCorners(rescaledPoints)
 
 	// TODO: need to orient poly to determine which is inner and which is outer.
