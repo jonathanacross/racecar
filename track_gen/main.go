@@ -53,25 +53,25 @@ func DrawToImage(width int, height int, numPoints int, roadWidth float64) {
 
 	red := color.RGBA{255, 0, 0, 255}
 	yellow := color.RGBA{255, 255, 0, 255}
-	purple := color.RGBA{255, 0, 128, 255}
+	// purple := color.RGBA{255, 0, 128, 255}
 	darkBlue := color.RGBA{0, 0, 255, 255}
 	lightBlue := color.RGBA{0, 128, 255, 255}
-	darkGreen := color.RGBA{0, 255, 0, 255}
-	lightGreen := color.RGBA{128, 255, 128, 255}
+	// darkGreen := color.RGBA{0, 255, 0, 255}
+	// lightGreen := color.RGBA{128, 255, 128, 255}
 
-	innerColor := darkGreen
-	if IsSelfIntersecting(trackData.inner) {
-		innerColor = darkBlue
-	}
-	outerColor := lightGreen
-	if IsSelfIntersecting(trackData.inner) {
-		outerColor = lightBlue
-	}
-	DrawPoly(dc, toGgPoly(trackData.orig), color.RGBA{0, 0, 0, 0}, purple)
+	// innerColor := darkGreen
+	// if IsSelfIntersecting(trackData.inner) {
+	// 	innerColor = darkBlue
+	// }
+	// outerColor := lightGreen
+	// if IsSelfIntersecting(trackData.inner) {
+	// 	outerColor = lightBlue
+	// }
+	// DrawPoly(dc, toGgPoly(trackData.orig), color.RGBA{0, 0, 0, 0}, purple)
 	DrawPoly(dc, toGgPoly(trackData.perturbed), color.RGBA{0, 0, 0, 0}, red)
 	DrawPoly(dc, toGgPoly(trackData.rounded), color.RGBA{0, 0, 0, 0}, yellow)
-	DrawPoly(dc, toGgPoly(trackData.inner), color.RGBA{0, 0, 0, 0}, innerColor)
-	DrawPoly(dc, toGgPoly(trackData.outer), color.RGBA{0, 0, 0, 0}, outerColor)
+	DrawPoly(dc, toGgPoly(trackData.inner), color.RGBA{0, 0, 0, 0}, darkBlue)
+	DrawPoly(dc, toGgPoly(trackData.outer), color.RGBA{0, 0, 0, 0}, lightBlue)
 
 	dc.SavePNG("polygon.png") // Save the drawing to a PNG file
 }

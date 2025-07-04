@@ -9,7 +9,6 @@ type Point struct {
 	Y float64
 }
 
-// Rects are in graphics coordinates, so bottom value is greater than the top value.
 type Rect struct {
 	left   float64
 	top    float64
@@ -23,8 +22,12 @@ func Dist(p1 Point, p2 Point) float64 {
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
+func Len(vec Point) float64 {
+	return math.Sqrt(vec.X*vec.X + vec.Y*vec.Y)
+}
+
 func Norm(vec Point) Point {
-	len := math.Sqrt(vec.X*vec.X + vec.Y*vec.Y)
+	len := Len(vec)
 	if len == 0 {
 		return Point{X: 0, Y: 0}
 	}

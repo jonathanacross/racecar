@@ -6,8 +6,6 @@ import (
 )
 
 // Expands a polygon
-// TODO: consider changing algorithm to standard polygon expansion
-// so that sides are parallel.
 func expand(poly []Point, r float64) []Point {
 	numPoints := len(poly)
 	expanded := make([]Point, numPoints)
@@ -17,13 +15,27 @@ func expand(poly []Point, r float64) []Point {
 		curr := poly[(i+1)%numPoints]
 		next := poly[(i+2)%numPoints]
 
-		dx := next.X - prev.X
-		dy := next.Y - prev.Y
-		d := math.Sqrt(dx*dx + dy*dy)
+		a := Norm(Point{
+			X: curr.X - prev.X,
+			Y: curr.Y - prev.Y,
+		})
+		b := Norm(Point{
+			X: next.X - curr.X,
+			Y: next.Y - curr.Y,
+		})
+		dir := Norm(Point{
+			X: -a.Y - b.Y,
+			Y: a.X + b.X,
+		})
+
+		mag := 0.5 * r * Len(Point{
+			X: a.X + b.X,
+			Y: a.Y + b.Y,
+		})
 
 		expanded[(i+1)%numPoints] = Point{
-			X: curr.X - (dy * r / d),
-			Y: curr.Y + (dx * r / d),
+			X: curr.X + dir.X*mag,
+			Y: curr.Y + dir.Y*mag,
 		}
 	}
 
