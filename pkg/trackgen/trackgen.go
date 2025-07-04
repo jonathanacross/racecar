@@ -53,8 +53,8 @@ func getPointsWithPoissonDiscSampling(numPoints int, bounds Rect) []Point {
 	minDistance := math.Sqrt(area / (float64(numPoints) * math.Pi))
 
 	for len(points) < numPoints {
-		candidateX := bounds.left + rand.Float64()*bounds.Width()
-		candidateY := bounds.top + rand.Float64()*bounds.Height()
+		candidateX := bounds.Left + rand.Float64()*bounds.Width()
+		candidateY := bounds.Top + rand.Float64()*bounds.Height()
 		candidate := Point{X: candidateX, Y: candidateY}
 
 		isTooClose := false
@@ -141,8 +141,8 @@ func perturb(ladder []Point, bounds Rect, roadWidth float64) {
 
 		// Ensure path stays in the bounding box.  Include some buffer
 		// so that after expanding, the final road will be within bounds.
-		ladder[i].X = Clamp(ladder[i].X, bounds.left+roadWidth, bounds.right-roadWidth)
-		ladder[i].Y = Clamp(ladder[i].Y, bounds.top+roadWidth, bounds.bottom-roadWidth)
+		ladder[i].X = Clamp(ladder[i].X, bounds.Left+roadWidth, bounds.Right-roadWidth)
+		ladder[i].Y = Clamp(ladder[i].Y, bounds.Top+roadWidth, bounds.Bottom-roadWidth)
 	}
 }
 
@@ -164,7 +164,7 @@ func getBoundingBox(points []Point) Rect {
 			maxY = p.Y
 		}
 	}
-	return Rect{left: minX, top: minY, right: maxX, bottom: maxY}
+	return Rect{Left: minX, Top: minY, Right: maxX, Bottom: maxY}
 }
 
 // Rescales a set of points to fit in a new rectangle
@@ -188,8 +188,8 @@ func rescale(points []Point, targetRect Rect) []Point {
 
 	for i, p := range points {
 		scaledPoints[i] = Point{
-			X: targetRect.left + (p.X-srcRect.left)*targetWidth/srcWidth,
-			Y: targetRect.top + (p.Y-srcRect.top)*targetHeight/srcHeight,
+			X: targetRect.Left + (p.X-srcRect.Left)*targetWidth/srcWidth,
+			Y: targetRect.Top + (p.Y-srcRect.Top)*targetHeight/srcHeight,
 		}
 	}
 
@@ -215,11 +215,11 @@ func smoothCorners(points []Point) []Point {
 }
 
 type TrackDebugData struct {
-	inner     []Point
-	outer     []Point
-	orig      []Point
-	perturbed []Point
-	rounded   []Point
+	Inner     []Point
+	Outer     []Point
+	Orig      []Point
+	Perturbed []Point
+	Rounded   []Point
 }
 
 func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float64) TrackDebugData {
@@ -249,20 +249,20 @@ func BuildPossiblyIntersectingTrack(numPoints int, bounds Rect, roadWidth float6
 	outer := expand(rounded, -roadWidth)
 
 	return TrackDebugData{
-		orig:      points,
-		perturbed: rescaledPoints,
-		rounded:   rounded,
-		inner:     inner,
-		outer:     outer,
+		Orig:      points,
+		Perturbed: rescaledPoints,
+		Rounded:   rounded,
+		Inner:     inner,
+		Outer:     outer,
 	}
 }
 
 func BuildTrack(numPoints int, bounds Rect, roadWidth float64) (inner []Point, outer []Point) {
 	for {
 		trackData := BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
-		if !IsSelfIntersecting(trackData.inner) && !IsSelfIntersecting(trackData.outer) {
-			inner = trackData.inner
-			outer = trackData.outer
+		if !IsSelfIntersecting(trackData.Inner) && !IsSelfIntersecting(trackData.Outer) {
+			inner = trackData.Inner
+			outer = trackData.Outer
 			return
 		}
 	}

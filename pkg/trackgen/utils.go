@@ -10,10 +10,10 @@ type Point struct {
 }
 
 type Rect struct {
-	left   float64
-	top    float64
-	right  float64
-	bottom float64
+	Left   float64
+	Top    float64
+	Right  float64
+	Bottom float64
 }
 
 func Dist(p1 Point, p2 Point) float64 {
@@ -45,11 +45,11 @@ func WeightedAverage(a Point, b Point, lambda float64) Point {
 }
 
 func (r *Rect) Width() float64 {
-	return r.right - r.left
+	return r.Right - r.Left
 }
 
 func (r *Rect) Height() float64 {
-	return r.bottom - r.top
+	return r.Bottom - r.Top
 }
 
 func Clamp(x float64, lo float64, hi float64) float64 {

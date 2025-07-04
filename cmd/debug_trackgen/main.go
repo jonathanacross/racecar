@@ -1,4 +1,4 @@
-package trackgen
+package main
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/fogleman/gg"
+	"github.com/jonathanacross/racecar/pkg/trackgen"
 )
 
 func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColor color.Color) {
@@ -30,7 +31,7 @@ func DrawPoly(dc *gg.Context, poly []gg.Point, fillColor color.Color, strokeColo
 	dc.Stroke()
 }
 
-func toGgPoly(points []Point) []gg.Point {
+func toGgPoly(points []trackgen.Point) []gg.Point {
 	result := make([]gg.Point, len(points))
 	for i, p := range points {
 		result[i] = gg.Point{X: p.X, Y: p.Y}
@@ -38,12 +39,12 @@ func toGgPoly(points []Point) []gg.Point {
 	return result
 }
 
-func DrawToImage(width int, height int, numPoints int, roadWidth float64) {
+func drawToImage(width int, height int, numPoints int, roadWidth float64) {
 	margin := math.Min(float64(width), float64(height)) / 10
 
-	bounds := Rect{left: float64(margin), top: float64(margin), right: float64(width) - margin, bottom: float64(height) - margin}
+	bounds := trackgen.Rect{Left: float64(margin), Top: float64(margin), Right: float64(width) - margin, Bottom: float64(height) - margin}
 
-	trackData := BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
+	trackData := trackgen.BuildPossiblyIntersectingTrack(numPoints, bounds, roadWidth)
 
 	dc := gg.NewContext(width, height)
 	dc.FillPreserve()
@@ -68,10 +69,10 @@ func DrawToImage(width int, height int, numPoints int, roadWidth float64) {
 	// 	outerColor = lightBlue
 	// }
 	// DrawPoly(dc, toGgPoly(trackData.orig), color.RGBA{0, 0, 0, 0}, purple)
-	DrawPoly(dc, toGgPoly(trackData.perturbed), color.RGBA{0, 0, 0, 0}, red)
-	DrawPoly(dc, toGgPoly(trackData.rounded), color.RGBA{0, 0, 0, 0}, yellow)
-	DrawPoly(dc, toGgPoly(trackData.inner), color.RGBA{0, 0, 0, 0}, darkBlue)
-	DrawPoly(dc, toGgPoly(trackData.outer), color.RGBA{0, 0, 0, 0}, lightBlue)
+	DrawPoly(dc, toGgPoly(trackData.Perturbed), color.RGBA{0, 0, 0, 0}, red)
+	DrawPoly(dc, toGgPoly(trackData.Rounded), color.RGBA{0, 0, 0, 0}, yellow)
+	DrawPoly(dc, toGgPoly(trackData.Inner), color.RGBA{0, 0, 0, 0}, darkBlue)
+	DrawPoly(dc, toGgPoly(trackData.Outer), color.RGBA{0, 0, 0, 0}, lightBlue)
 
 	dc.SavePNG("polygon.png") // Save the drawing to a PNG file
 }
@@ -107,5 +108,5 @@ func main() {
 		return
 	}
 
-	DrawToImage(width, height, numPoints, roadWidth)
+	drawToImage(width, height, numPoints, roadWidth)
 }
